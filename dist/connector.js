@@ -70,7 +70,7 @@
       lastPrompt = {
         kind: 'chat_completion',
         at: new Date().toISOString(),
-        messages: JSON.parse(JSON.stringify(data.messages ?? [])),
+        messages: JSON.parse(JSON.stringify(data.chat ?? data.messages ?? [])),
       };
     } catch (e) { console.warn('[小狸] 提示词捕获失败', e); }
   });
@@ -99,7 +99,7 @@
       if (busy) throw new Error('上一条还在生成中');
       busy = true;
       try {
-        await createChatMessages([{ role: 'user', content: text }]);
+        await createChatMessages([{ role: 'user', message: text }]);
         if (!trigger) return { sent: true, message_id: lastId() };
         const wait = waitGeneration(timeoutMs - 2000);
         await triggerSlash('/trigger');
