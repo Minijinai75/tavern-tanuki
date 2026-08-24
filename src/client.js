@@ -50,6 +50,32 @@ export class STClient {
     }
     const data = await res.json();
     this.csrfToken = data.token;
+    await this.#userLogin();
+  }
+
+  /**
+   * Multi-user mode (enableUserAccounts: true) needs a session from
+   * POST /api/users/login — Basic Auth alone still gets 403 there.
+   * Uses the same ST_USER/ST_PASSWORD pair as the account handle/password.
+   * Fails soft: on a basic-auth-only instance the extra login is a no-op.
+   */
+  async #userLogin() {
+    if (!this.user || !this.password) return;
+    try {
+      const res = await fetch(`${this.baseUrl}/api/users/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-Token': this.csrfToken,
+          ...this.#authHeader(),
+          ...this.#cookieHeader(),
+        },
+        body: JSON.stringify({ handle: this.user, password: this.password }),
+      });
+      this.#storeCookies(res);
+    } catch {
+      /* soft-fail: basic-auth-only instances work without a user session */
+    }
   }
 
   async #request(method, path, body, retry = true) {
