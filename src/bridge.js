@@ -15,13 +15,39 @@ export class Bridge {
     this.pending = new Map();
     this.nextId = 1;
     this.disabled = false;
-    this.wss = new WebSocketServer({ host: '127.0.0.1', port });
-    this.wss.on('error', (e) => {
+    this.wss = null;
+    this.retryTimer = null;
+    this.#bind();
+  }
+
+  // 26-09-07 補位邏輯：搶不到埠不再自廢——每 5 秒重試，前一個實例（別的窗的殘留）
+  // 一死就自動接手。多窗並存時永遠有一隻活狸貓值班，誰活著誰上。
+  #bind() {
+    const wss = new WebSocketServer({ host: '127.0.0.1', port: this.port });
+    wss.on('error', (e) => {
+      wss.close();
+      if (this.wss === wss) this.wss = null;
+      if (e.code === 'EADDRINUSE') {
+        if (!this.retryTimer) {
+          console.error(`[bridge] port ${this.port} busy (another tavern-tanuki instance) — will retry every 5s and take over when it exits.`);
+          this.retryTimer = setInterval(() => this.#bind(), 5000);
+          this.retryTimer.unref?.();
+        }
+        return;
+      }
       this.disabled = true;
-      console.error(`[bridge] WS server error (${e.code ?? e.message}) — play tools disabled. ` +
-        'Is another tavern-tanuki instance running on the same port?');
+      console.error(`[bridge] WS server error (${e.code ?? e.message}) — play tools disabled.`);
     });
-    this.wss.on('connection', (ws) => {
+    wss.on('listening', () => {
+      this.wss = wss;
+      this.disabled = false;
+      if (this.retryTimer) {
+        clearInterval(this.retryTimer);
+        this.retryTimer = null;
+        console.error(`[bridge] port ${this.port} acquired — play tools enabled.`);
+      }
+    });
+    wss.on('connection', (ws) => {
       // Newest connection wins (e.g. after a tavern page reload).
       if (this.socket && this.socket.readyState === 1) this.socket.close();
       this.socket = ws;
