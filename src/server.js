@@ -13,6 +13,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { STClient } from './client.js';
 import { Bridge } from './bridge.js';
+import { CLAIM_FILE, clearClaim, readClaim, writeClaim } from './claim.js';
 
 const st = new STClient();
 const bridge = new Bridge();
@@ -331,12 +332,37 @@ tool(
   'Check whether the in-browser tavern connector is online, and which character/chat is currently open. All play_* tools need the 小狸连接器 script running inside SillyTavern (酒馆助手 → 脚本库).',
   {},
   async () => {
+    const s = bridge.status();
     if (!bridge.connected) {
-      return { connected: false, hint: 'Open SillyTavern in a browser with the 小狸连接器 script enabled.' };
+      const hint = !s.holding && s.holder && s.holder !== s.me
+        ? `這扇窗沒拿代玩線：代玩牌在「${s.holder}」手上。要接線就 play_claim（預設寫自己的名字）。`
+        : !s.holding
+          ? '6700 被別扇窗的小狸拿著，這扇每 5 秒排隊；要指定給這扇就 play_claim。'
+          : 'Open SillyTavern in a browser with the 小狸连接器 script enabled.';
+      return { connected: false, ...s, hint };
     }
     const info = await bridge.call('status');
-    return { connected: true, ...info };
+    return { connected: true, ...s, ...info };
   },
+);
+
+tool(
+  'play_claim',
+  '代玩牌：把酒館代玩線指定給某扇窗。寫牌之後，牌上那家的小狸會綁 6700，其他家的小狸 5 秒內自己放手；不用關窗。who 省略＝這扇窗自己（環境變數 TANUKI_WHO 或 MINI_AGENT 的名字）。',
+  { who: z.string().optional().describe('線要歸誰（隊友名，例：沐晴）。省略＝這扇窗自己') },
+  async ({ who }) => {
+    const target = (who ?? bridge.me ?? '').trim();
+    if (!target) throw new Error('這扇窗沒有名字（沒有 TANUKI_WHO／MINI_AGENT），請明寫 who。');
+    const o = writeClaim(target, bridge.me || 'unknown');
+    return { claimed: o.who, by: o.by, at: o.at, file: CLAIM_FILE, note: '最多 5 秒後生效；play_status 看 holding／connected。' };
+  },
+);
+
+tool(
+  'play_release',
+  '收掉代玩牌：回到「誰先綁 6700 誰拿」。現在拿著線的小狸不會因此放手。',
+  {},
+  async () => ({ cleared: clearClaim(), was: readClaim() }),
 );
 
 tool(

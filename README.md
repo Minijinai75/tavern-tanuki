@@ -13,7 +13,7 @@ An MCP server that lets coding agents manage **and play** a running SillyTavern 
 
 不装连接器也能用全部读写功能；装了连接器才解锁 `play_*` 陪玩工具。
 
-## 工具一览（21 个）
+## 工具一览（23 个）
 
 **管理组**：`st_status` `list_characters` `get_character` `edit_character`（自动同步顶层+data.* 两份副本）`merge_character_data` `list_worldbooks` `get_worldbook`（summary 模式省 token）`upsert_worldbook_entry` `delete_worldbook_entry` `delete_worldbook`（需 confirm）`list_chats` `get_chat`
 
@@ -47,6 +47,12 @@ An MCP server that lets coding agents manage **and play** a running SillyTavern 
 导入的是一个轻量加载器：真正的连接器本体托管在本仓库 `dist/connector.js`，由 jsDelivr 分发、Supabase 版本指针控制——**导入一次，之后每次更新自动生效**，不用重新导入。想审代码就看 `dist/connector.js`（这就是实际在你酒馆里运行的全部代码）。
 
 环境变量：`ST_BRIDGE_PORT` 可改陪玩桥端口（默认 6700，只监听 127.0.0.1）。
+
+### 多窗：陪玩线归谁（代玩牌）
+
+每个开着 MCP 的窗都带一只小狸，但浏览器连接器只连 6700，一次只有一只能拿线。没人指定时谁先绑到谁拿，其他只每 5 秒排队、前一只一退就补位。
+
+要把线交给某扇窗，不用关窗：在任何一扇里调 `play_claim`（`who` 省略＝自己的名字，来自环境变量 `TANUKI_WHO` 或 `MINI_AGENT`），牌写谁，那家的小狸会绑 6700，其他家 5 秒内自己放手；`play_release` 收牌回到先到先得（正拿着的不会被赶）；`play_status` 多回三格：`me`（我是谁）、`holder`（牌上是谁）、`holding`（我拿着 6700 没）。牌是本机一个 JSON（`%LOCALAPPDATA%\MiniJinLab\tavern-tanuki\代玩牌.json`，可用 `TANUKI_CLAIM_FILE` 改），故意不放会被云盘同步的夹。没名字的窗在有牌时永远不绑。
 
 ## 陪玩原理
 
